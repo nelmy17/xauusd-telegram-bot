@@ -1,14 +1,12 @@
-from flask import Flask, request
+import time
 import requests
 import pandas as pd
 from telegram import Bot
 import os
 
-app = Flask(__name__)
-
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
-API_KEY = os.environ.get("TWELVE_API_KEY")  # your Twelve Data API key
+API_KEY = os.environ.get("TWELVE_API_KEY")
 
 bot = Bot(token=BOT_TOKEN)
 
@@ -16,7 +14,6 @@ def get_xauusd_data():
     url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=15min&outputsize=100&apikey={API_KEY}"
     r = requests.get(url)
     data = r.json()
-
     if 'values' not in data:
         raise ValueError("Invalid response from API")
 
@@ -34,26 +31,22 @@ def calculate_stochastic(df, k_period=14, d_period=3):
     df['%D'] = df['%K'].rolling(window=d_period).mean()
     return df
 
-@app.route('/')
-def home():
-    return '✅ Python-only XAUUSD bot running!'
-
-@app.route('/check', methods=['GET'])
 def check_stochastic():
+    df = get_xauusd_data()
+    df = calculate_stochastic(df)
+    k = df['%K'].iloc[-1]
+    if k > 80:
+        bot.send_message(chat_id=CHAT_ID, text=f"🚨 XAUUSD Overbought! %K = {k:.2f}")
+    elif k < 20:
+        bot.send_message(chat_id=CHAT_ID, text=f"✅ XAUUSD Oversold! %K = {k:.2f}")
+    else:
+        print(f"No alert. %K = {k:.2f}")
+
+# 🔁 Run forever every 15 minutes
+while True:
     try:
-        df = get_xauusd_data()
-        df = calculate_stochastic(df)
-        k = df['%K'].iloc[-1]
-
-        if k > 80:
-            bot.send_message(chat_id=CHAT_ID, text=f"🚨 XAUUSD Overbought! %K = {k:.2f}")
-        elif k < 20:
-            bot.send_message(chat_id=CHAT_ID, text=f"✅ XAUUSD Oversold! %K = {k:.2f}")
-        else:
-            return f"Stochastic neutral (%K = {k:.2f})", 200
-
-        return "ok", 200
-
+        check_stochastic()
     except Exception as e:
-        bot.send_message(chat_id=CHAT_ID, text=f"❌ Error: {e}")
-        return "error", 500
+        bot.send_message(chat_id=CHAT_ID, text=f"❌ Bot error: {e}")
+    time.sleep(15 * 60)  # 15 minutes
+
