@@ -1,8 +1,10 @@
-import time
+from flask import Flask
 import requests
 import pandas as pd
 from telegram import Bot
 import os
+
+app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -16,7 +18,6 @@ def get_xauusd_data():
     data = r.json()
     if 'values' not in data:
         raise ValueError("Invalid response from API")
-
     df = pd.DataFrame(data['values'])
     df['datetime'] = pd.to_datetime(df['datetime'])
     df = df.sort_values('datetime')
@@ -31,22 +32,26 @@ def calculate_stochastic(df, k_period=14, d_period=3):
     df['%D'] = df['%K'].rolling(window=d_period).mean()
     return df
 
+@app.route('/')
+def home():
+    return '✅ XAUUSD bot is running!'
+
+@app.route('/check', methods=['GET'])
 def check_stochastic():
-    df = get_xauusd_data()
-    df = calculate_stochastic(df)
-    k = df['%K'].iloc[-1]
-    if k > 80:
-        bot.send_message(chat_id=CHAT_ID, text=f"🚨 XAUUSD Overbought! %K = {k:.2f}")
-    elif k < 20:
-        bot.send_message(chat_id=CHAT_ID, text=f"✅ XAUUSD Oversold! %K = {k:.2f}")
-    else:
-        print(f"No alert. %K = {k:.2f}")
-
-# 🔁 Run forever every 15 minutes
-while True:
     try:
-        check_stochastic()
-    except Exception as e:
-        bot.send_message(chat_id=CHAT_ID, text=f"❌ Bot error: {e}")
-    time.sleep(15 * 60)  # 15 minutes
+        df = get_xauusd_data()
+        df = calculate_stochastic(df)
+        k = df['%K'].iloc[-1]
 
+        if k > 80:
+            bot.send_message(chat_id=CHAT_ID, text=f"🚨 XAUUSD Overbought! %K = {k:.2f}")
+        elif k < 20:
+            bot.send_message(chat_id=CHAT_ID, text=f"✅ XAUUSD Oversold! %K = {k:.2f}")
+        else:
+            print(f"Stochastic neutral (%K = {k:.2f})")
+
+        return "ok", 200
+
+    except Exception as e:
+        bot.send_message(chat_id=CHAT_ID, text=f"❌ Error: {str(e)}")
+        return "error", 500
