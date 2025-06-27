@@ -1,4 +1,4 @@
 flask
-python-telegram-bot==20.6
 requests
 pandas
+python-telegram-bot==20.6
