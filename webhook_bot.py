@@ -7,15 +7,15 @@ import os
 # Initialize Flask app
 app = Flask(__name__)
 
-# Environment variables from Render
+# Get credentials from environment variables (set these in Render)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 API_KEY = os.environ.get("TWELVE_API_KEY")
 
-# Initialize Telegram Bot
+# Initialize Telegram bot
 bot = Bot(token=BOT_TOKEN)
 
-# Function to fetch XAUUSD 15min candles
+# Function to fetch 15min XAU/USD data from Twelve Data
 def get_xauusd_data():
     url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=15min&outputsize=100&apikey={API_KEY}"
     r = requests.get(url)
@@ -37,18 +37,18 @@ def calculate_stochastic(df, k_period=14, d_period=3):
     df['%D'] = df['%K'].rolling(window=d_period).mean()
     return df
 
-# Home route just confirms service is up
+# Home route (optional health check)
 @app.route('/')
 def home():
     return '✅ XAUUSD bot is running!'
 
-# Main /check route for alerts
+# Main alert route
 @app.route('/check', methods=['GET'])
 def check_stochastic():
     try:
         df = get_xauusd_data()
         df = calculate_stochastic(df)
-        k = df['%K'].iloc[-1]  # latest %K value
+        k = df['%K'].iloc[-1]  # Latest %K value
 
         if k > 80:
             bot.send_message(chat_id=CHAT_ID, text=f"🚨 XAUUSD Overbought! %K = {k:.2f}")
@@ -58,12 +58,13 @@ def check_stochastic():
             print(f"Neutral zone: %K = {k:.2f}")
 
         return "ok", 200
-        @app.route('/test', methods=['GET'])
-def test_alert():
-    bot.send_message(chat_id=CHAT_ID, text="✅ Test alert: Your Telegram bot is working!")
-    return "Test sent", 200
-
 
     except Exception as e:
         bot.send_message(chat_id=CHAT_ID, text=f"❌ Error: {str(e)}")
         return "error", 500
+
+# Test route to verify Telegram works even when market is closed
+@app.route('/test', methods=['GET'])
+def test_alert():
+    bot.send_message(chat_id=CHAT_ID, text="✅ Test alert: Your Telegram bot is working!")
+    return "Test sent", 200
