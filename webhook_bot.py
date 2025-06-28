@@ -58,6 +58,11 @@ def check_stochastic():
             print(f"Neutral zone: %K = {k:.2f}")
 
         return "ok", 200
+        @app.route('/test', methods=['GET'])
+def test_alert():
+    bot.send_message(chat_id=CHAT_ID, text="✅ Test alert: Your Telegram bot is working!")
+    return "Test sent", 200
+
 
     except Exception as e:
         bot.send_message(chat_id=CHAT_ID, text=f"❌ Error: {str(e)}")
