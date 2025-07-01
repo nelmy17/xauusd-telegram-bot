@@ -1,16 +1,12 @@
-import os
 import requests
 import pandas as pd
 from flask import Flask, request
 from telegram import Bot
-from dotenv import load_dotenv
 
-load_dotenv()  # Load .env file if you use one
-
-# === Configuration ===
-API_KEY = os.environ.get("TWELVE_DATA_API_KEY", "your_twelve_data_api_key")
-TELEGRAM_TOKEN = os.environ.get("BOT_TOKEN", "your_telegram_bot_token")
-CHAT_ID = os.environ.get("CHAT_ID", "your_chat_id")
+# === Insert your credentials directly ===
+API_KEY = "78ade9c6b5de4093951a1e99afa96f50"       # Example: 9abc1def2345678
+TELEGRAM_TOKEN = "7308283803:AAHm3CmrIlpGoehyAhX9xgJdAzTn_bZcJcU"  # Example: 1234567890:ABCDEF...
+CHAT_ID = "6748992445"                    # Example: 123456789 or -1001234567890 for groups
 
 app = Flask(__name__)
 bot = Bot(token=TELEGRAM_TOKEN)
@@ -27,7 +23,7 @@ def get_xauusd_data():
         return pd.DataFrame()
 
     df = pd.DataFrame(data["values"])
-    df = df.iloc[::-1]  # reverse to chronological order
+    df = df.iloc[::-1]
     df["close"] = df["close"].astype(float)
     df["high"] = df["high"].astype(float)
     df["low"] = df["low"].astype(float)
@@ -77,6 +73,6 @@ def check_stochastic():
 def home():
     return "XAUUSD bot is running", 200
 
-# === Run for local testing ===
+# === Local server test ===
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
