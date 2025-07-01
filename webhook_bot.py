@@ -36,5 +36,45 @@ def calculate_stochastic(df, k_period=14):
     low_min = df["low"].rolling(window=k_period).min()
     high_max = df["high"].rolling(window=k_period).max()
     df["%K"] = 100 * ((df["close"] - low_min) / (high_max - low_min))
+    return df
+
+# === /test route: sends a manual message ===
+@app.route('/test', methods=['GET'])
+def test_alert():
+    bot.send_message(chat_id=CHAT_ID, text="✅ Manual test alert from your XAUUSD bot is working.")
+    return "ok", 200
+
+# === /check route: sends alert if overbought/oversold ===
+@app.route('/check', methods=['GET'])
+def check_stochastic():
+    try:
+        df = get_xauusd_data()
+        df = calculate_stochastic(df)
+
+        if df.empty or df['%K'].isnull().all():
+            return "No data", 200
+
+        k = df['%K'].iloc[-1]
+
+        if k > 80:
+            bot.send_message(chat_id=CHAT_ID, text=f"🚨 XAUUSD Overbought Alert! %K = {k:.2f}")
+        elif k < 20:
+            bot.send_message(chat_id=CHAT_ID, text=f"✅ XAUUSD Oversold Alert! %K = {k:.2f}")
+
+        return "ok", 200
+
+    except Exception as e:
+        return f"error: {str(e)}", 500
+
+# === Home route for Render ===
+@app.route('/', methods=['GET'])
+def home():
+    return "✅ XAUUSD Telegram bot is running!", 200
+
+# === Main ===
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+
+
 
 
