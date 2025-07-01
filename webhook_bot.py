@@ -34,5 +34,7 @@ def calculate_stochastic(df, k_period=14):
         return df
 
     low_min = df["low"].rolling(window=k_period).min()
-    high_max = df["high"].rolling(window=_
+    high_max = df["high"].rolling(window=k_period).max()
+    df["%K"] = 100 * ((df["close"] - low_min) / (high_max - low_min))
+
 
