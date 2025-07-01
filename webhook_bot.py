@@ -1,23 +1,39 @@
+
+   import os
+import requests
+import pandas as pd
 from flask import Flask, request
 from telegram import Bot
-import os
+
+# === YOUR CREDENTIALS HERE ===
+API_KEY = "78ade9c6b5de4093951a1e99afa96f50"  # TwelveData API key
+TELEGRAM_TOKEN = "7308283803:AAHm3CmrIlpGoehyAhX9xgJdAzTn_bZcJcU"  # Your bot token from BotFather
+CHAT_ID = "6748992445"  # Your Telegram chat ID
 
 app = Flask(__name__)
+bot = Bot(token=TELEGRAM_TOKEN)
 
-BOT_TOKEN = os.environ.get("7308283803:AAHm3CmrIlpGoehyAhX9xgJdAzTn_bZcJcU")
-CHAT_ID = os.environ.get("6748992445D")
-bot = Bot(token=7308283803:AAHm3CmrIlpGoehyAhX9xgJdAzTn_bZcJcU)
+# === Function to get XAU/USD 15-minute data ===
+def get_xauusd_data():
+    url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=15min&outputsize=50&apikey={API_KEY}"
+    response = requests.get(url)
+    data = response.json()
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    data = request.json
-    message = data.get('message', '🚨 TradingView Alert Triggered!')
-    bot.send_message(chat_id=CHAT_ID, text=message)
-    return 'ok', 200
+    if "values" not in data:
+        return pd.DataFrame()
 
-@app.route('/')
-def home():
-    return '✅ TradingView to Telegram bot is running!'
+    df = pd.DataFrame(data["values"])
+    df = df.iloc[::-1]  # reverse to chronological order
+    df["close"] = df["close"].astype(float)
+    df["high"] = df["high"].astype(float)
+    df["low"] = df["low"].astype(float)
+    return df
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+# === Function to calculate Stochastic %K ===
+def calculate_stochastic(df, k_period=14):
+    if df.empty or len(df) < k_period:
+        return df
+
+    low_min = df["low"].rolling(window=k_period).min()
+    high_max = df["high"].rolling(window=_
+
