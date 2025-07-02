@@ -1,0 +1,11 @@
+
+5. Save and close the file.
+
+---
+
+### ✅ Option 2: Using Command Line
+
+If you're in your project folder, just run:
+
+```bash
+echo python-3.12.3 > runtime.txt
