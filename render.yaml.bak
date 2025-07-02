@@ -3,7 +3,7 @@ services:
     name: tradingview-telegram-bot
     env: python
     plan: free
-    buildCommand: ""
+    pythonVersion: 3.12.3
     startCommand: python webhook_bot.py
     envVars:
       - key: BOT_TOKEN
