@@ -42,4 +42,5 @@ def check_stochastic_signal():
     if latest_k < 20 and latest_k > latest_d:
         send_telegram_message(f"🟢 BUY Signal on XAUUSD\nStochastic %K={latest_k:.2f}, %D={latest_d:.2f}")
     elif latest_k > 80 and latest_k < latest_d:
-        send_telegram_message(f"🔴 SELL Signal on XAUUSD\nStochastic %K={la
+       send_telegram_message(f"🔴 SELL Signal on XAUUSD\nStochastic %K={latest_k:.2f}, %D={latest_d:.2f}")
+       print(f"ℹ️ No signal. %K={latest_k:.2f}, %D={latest_d:.2f}")
