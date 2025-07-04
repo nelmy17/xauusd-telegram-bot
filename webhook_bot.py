@@ -1,6 +1,7 @@
 from flask import Flask
 import requests
 import pandas as pd
+import os
 
 # === Your Credentials ===
 BOT_TOKEN = "7308283803:AAHm3CmrIlpGoehyAhX9xgJdAzTn_bZcJcU"
@@ -42,5 +43,19 @@ def check_stochastic_signal():
     if latest_k < 20 and latest_k > latest_d:
         send_telegram_message(f"🟢 BUY Signal on XAUUSD\nStochastic %K={latest_k:.2f}, %D={latest_d:.2f}")
     elif latest_k > 80 and latest_k < latest_d:
-       send_telegram_message(f"🔴 SELL Signal on XAUUSD\nStochastic %K={latest_k:.2f}, %D={latest_d:.2f}")
-       print(f"ℹ️ No signal. %K={latest_k:.2f}, %D={latest_d:.2f}")
+        send_telegram_message(f"🔴 SELL Signal on XAUUSD\nStochastic %K={latest_k:.2f}, %D={latest_d:.2f}")
+    else:
+        print(f"ℹ️ No signal. %K={latest_k:.2f}, %D={latest_d:.2f}")
+
+    return "✅ Check complete"
+
+# === Web Endpoint ===
+@app.route("/check")
+def check():
+    result = check_stochastic_signal()
+    return result, 200
+
+# === Run Flask App with Correct Port (for Render) ===
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))  # use Render's assigned port or 10000 locally
+    app.run(debug=False, host="0.0.0.0", port=port)
