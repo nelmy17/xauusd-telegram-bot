@@ -1,82 +1,45 @@
-from flask import Flask, request
+from flask import Flask
 import requests
 import pandas as pd
 
-# === CREDENTIALS (REPLACE WITH YOUR OWN IF CHANGED) ===
-BOT_TOKEN = "7308283803:AAHm3CmrIlpGoehyAhX9xgJdAzTn_bZcJcU"     # Telegram Bot Token
-CHAT_ID = "674899244"                                           # Your Telegram User ID
-API_KEY = "78ade9c6b5de4093951a1e99afa96f50"                    # TwelveData API Key
+# === Your Credentials ===
+BOT_TOKEN = "7308283803:AAHm3CmrIlpGoehyAhX9xgJdAzTn_bZcJcU"
+CHAT_ID = "674899244"
+API_KEY = "Y9U9VDI5U7Z56Z5S"  # Alpha Vantage API Key
 
-# === INIT FLASK ===
+# === Flask App ===
 app = Flask(__name__)
 
-# === TELEGRAM MESSAGE FUNCTION ===
+# === Telegram Function ===
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": text}
+    requests.post(url, json=payload)
 
-    # 🔍 DEBUG: PRINT TELEGRAM RESPONSE
-    response = requests.post(url, json=payload)
-    print("Telegram response:", response.status_code, response.text)
+# === Fetch XAUUSD & Calculate Stochastic ===
+def check_stochastic_signal():
+    url = f"https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=XAU&to_symbol=USD&interval=5min&apikey={API_KEY}&outputsize=compact"
+    response = requests.get(url).json()
 
-    return response.status_code
-
-# === ROOT ROUTE: HEALTH CHECK ===
-@app.route('/')
-def home():
-    return "✅ XAUUSD Telegram bot is running", 200
-
-# === MANUAL TEST ALERT ===
-@app.route('/test', methods=['GET'])
-def test_alert():
-    send_telegram_message("✅ Manual test alert from webhook_bot.py")
-    return "ok", 200
-
-# === STOCHASTIC ALERT LOGIC ===
-@app.route('/check', methods=['GET'])
-def check_stochastic():
     try:
-        # 📊 FETCH 15-MIN XAU/USD DATA
-        url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=15min&outputsize=50&apikey={API_KEY}"
-        response = requests.get(url)
-        data = response.json()
+        data = response["Time Series FX (5min)"]
+    except KeyError:
+        return "❌ Error fetching data"
 
-        # ❌ API FAILED
-        if "values" not in data:
-            print("❌ No 'values' key in response.")
-            return "❌ No data returned from API", 200
+    df = pd.DataFrame(data).T
+    df.columns = ["open", "high", "low", "close"]
+    df = df.astype(float).sort_index()
 
-        # 📈 PROCESS DATA
-        df = pd.DataFrame(data["values"])
-        df = df.iloc[::-1]  # Reverse order to chronological
-        df["close"] = df["close"].astype(float)
-        df["high"] = df["high"].astype(float)
-        df["low"] = df["low"].astype(float)
+    # Calculate Stochastic
+    low_min = df["low"].rolling(window=14).min()
+    high_max = df["high"].rolling(window=14).max()
+    df["%K"] = 100 * ((df["close"] - low_min) / (high_max - low_min))
+    df["%D"] = df["%K"].rolling(window=3).mean()
 
-        # 🔢 CALCULATE STOCHASTIC %K
-        low_min = df["low"].rolling(window=14).min()
-        high_max = df["high"].rolling(window=14).max()
-        df["%K"] = 100 * ((df["close"] - low_min) / (high_max - low_min))
-        k = df["%K"].iloc[-1]  # Latest value
+    latest_k = df["%K"].iloc[-1]
+    latest_d = df["%D"].iloc[-1]
 
-        # 📋 DEBUG OUTPUT
-        print(f"Calculated Stochastic %K: {k:.2f}")
-
-        # 🚨 ALERT CONDITIONS
-        if k > 80:
-            send_telegram_message(f"🚨 XAUUSD Overbought Alert! %K = {k:.2f}")
-        elif k < 20:
-            send_telegram_message(f"✅ XAUUSD Oversold Alert! %K = {k:.2f}")
-        else:
-            print("ℹ️ %K is neutral. No alert sent.")
-
-        return f"Stochastic %K = {k:.2f}", 200
-
-    except Exception as e:
-        print("❌ Exception occurred:", str(e))
-        return f"❌ Error: {str(e)}", 500
-
-# === RUN SERVER ===
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-
+    if latest_k < 20 and latest_k > latest_d:
+        send_telegram_message(f"🟢 BUY Signal on XAUUSD\nStochastic %K={latest_k:.2f}, %D={latest_d:.2f}")
+    elif latest_k > 80 and latest_k < latest_d:
+        send_telegram_message(f"🔴 SELL Signal on XAUUSD\nStochastic %K={la
