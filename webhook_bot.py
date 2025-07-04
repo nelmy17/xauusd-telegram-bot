@@ -3,35 +3,41 @@ import requests
 import pandas as pd
 import os
 
-# === Your Credentials ===
+# === HARDCODED CREDENTIALS ===
 BOT_TOKEN = "7308283803:AAHm3CmrIlpGoehyAhX9xgJdAzTn_bZcJcU"
 CHAT_ID = "674899244"
-API_KEY = "Y9U9VDI5U7Z56Z5S"  # Alpha Vantage API Key
+TWELVE_API_KEY = "78ade9c6b5de4093951a1e99afa96f50"  # Your Twelve Data API key
 
 # === Flask App ===
 app = Flask(__name__)
 
-# === Telegram Function ===
+# === Telegram Alert ===
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": text}
     requests.post(url, json=payload)
 
-# === Fetch XAUUSD & Calculate Stochastic ===
-def check_stochastic_signal():
-    url = f"https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=XAU&to_symbol=USD&interval=5min&apikey={API_KEY}&outputsize=compact"
+# === Fetch XAU/USD from Twelve Data ===
+def get_xauusd_data():
+    url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=5min&apikey={TWELVE_API_KEY}&outputsize=50"
     response = requests.get(url).json()
 
-    try:
-        data = response["Time Series FX (5min)"]
-    except KeyError:
-        return "❌ Error fetching data"
+    if "values" not in response:
+        return None, "❌ Error fetching data"
 
-    df = pd.DataFrame(data).T
-    df.columns = ["open", "high", "low", "close"]
-    df = df.astype(float).sort_index()
+    df = pd.DataFrame(response["values"])
+    df.columns = ["datetime", "open", "high", "low", "close"]
+    df = df.astype({"open": float, "high": float, "low": float, "close": float})
+    df = df.sort_values("datetime").reset_index(drop=True)
 
-    # Calculate Stochastic
+    return df, "✅ Data fetched"
+
+# === Stochastic Signal Logic ===
+def check_stochastic_signal():
+    df, status = get_xauusd_data()
+    if df is None:
+        return status
+
     low_min = df["low"].rolling(window=14).min()
     high_max = df["high"].rolling(window=14).max()
     df["%K"] = 100 * ((df["close"] - low_min) / (high_max - low_min))
@@ -49,13 +55,13 @@ def check_stochastic_signal():
 
     return "✅ Check complete"
 
-# === Web Endpoint ===
+# === Webhook Endpoint ===
 @app.route("/check")
 def check():
     result = check_stochastic_signal()
     return result, 200
 
-# === Run Flask App with Correct Port (for Render) ===
+# === Run Locally or on Render ===
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))  # use Render's assigned port or 10000 locally
+    port = int(os.environ.get("PORT", 10000))
     app.run(debug=False, host="0.0.0.0", port=port)
