@@ -1,67 +1,79 @@
 from flask import Flask
 import requests
 import pandas as pd
-import os
 
-# === HARDCODED CREDENTIALS ===
+# === 🔐 CREDENTIALS (hardcoded for deployment) ===
 BOT_TOKEN = "7308283803:AAHm3CmrIlpGoehyAhX9xgJdAzTn_bZcJcU"
 CHAT_ID = "674899244"
-TWELVE_API_KEY = "78ade9c6b5de4093951a1e99afa96f50"  # Your Twelve Data API key
+API_KEY = "7f4ff730c91f41f08a1c91a9c6c62391"  # Twelve Data API key
 
-# === Flask App ===
+# === ⚙️ FLASK APP ===
 app = Flask(__name__)
 
-# === Telegram Alert ===
+# === 📬 Send message to Telegram ===
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": text}
-    requests.post(url, json=payload)
+    try:
+        response = requests.post(url, data=payload)
+        response.raise_for_status()
+    except Exception as e:
+        print(f"❌ Telegram error: {e}")
 
-# === Fetch XAU/USD from Twelve Data ===
-def get_xauusd_data():
-    url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=5min&apikey={TWELVE_API_KEY}&outputsize=50"
-    response = requests.get(url).json()
+# === 📊 Calculate Stochastic %K and %D ===
+def get_stochastic():
+    url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=5min&outputsize=100&apikey={API_KEY}"
+    try:
+        response = requests.get(url).json()
+        if "values" not in response:
+            return None, "❌ Data error: 'values' missing in response"
 
-    if "values" not in response:
-        return None, "❌ Error fetching data"
+        df = pd.DataFrame(response["values"])
+        df["datetime"] = pd.to_datetime(df["datetime"])
+        df.set_index("datetime", inplace=True)
+        df = df.astype(float)
+        df.sort_index(inplace=True)
 
-    df = pd.DataFrame(response["values"])
-    df.columns = ["datetime", "open", "high", "low", "close"]
-    df = df.astype({"open": float, "high": float, "low": float, "close": float})
-    df = df.sort_values("datetime").reset_index(drop=True)
+        # Calculate %K and %D
+        low_min = df["low"].rolling(window=14).min()
+        high_max = df["high"].rolling(window=14).max()
+        df["%K"] = 100 * ((df["close"] - low_min) / (high_max - low_min))
+        df["%D"] = df["%K"].rolling(window=3).mean()
 
-    return df, "✅ Data fetched"
+        latest_k = df["%K"].iloc[-1]
+        latest_d = df["%D"].iloc[-1]
+        return (round(latest_k, 2), round(latest_d, 2)), None
 
-# === Stochastic Signal Logic ===
-def check_stochastic_signal():
-    df, status = get_xauusd_data()
-    if df is None:
-        return status
+    except Exception as e:
+        return None, f"❌ Exception during Stochastic calculation: {str(e)}"
 
-    low_min = df["low"].rolling(window=14).min()
-    high_max = df["high"].rolling(window=14).max()
-    df["%K"] = 100 * ((df["close"] - low_min) / (high_max - low_min))
-    df["%D"] = df["%K"].rolling(window=3).mean()
-
-    latest_k = df["%K"].iloc[-1]
-    latest_d = df["%D"].iloc[-1]
-
-    if latest_k < 20 and latest_k > latest_d:
-        send_telegram_message(f"🟢 BUY Signal on XAUUSD\nStochastic %K={latest_k:.2f}, %D={latest_d:.2f}")
-    elif latest_k > 80 and latest_k < latest_d:
-        send_telegram_message(f"🔴 SELL Signal on XAUUSD\nStochastic %K={latest_k:.2f}, %D={latest_d:.2f}")
-    else:
-        print(f"ℹ️ No signal. %K={latest_k:.2f}, %D={latest_d:.2f}")
-
-    return "✅ Check complete"
-
-# === Webhook Endpoint ===
+# === 🔁 Route to trigger Stochastic check ===
 @app.route("/check")
-def check():
-    result = check_stochastic_signal()
-    return result, 200
+def check_stochastic():
+    values, error = get_stochastic()
+    if error:
+        send_telegram_message(error)
+        return error
 
-# === Run Locally or on Render ===
+    k, d = values
+    print(f"📊 Latest Stochastic %K = {k}, %D = {d}")
+
+    if k < 20:
+        message = f"📉 XAUUSD Stochastic %K = {k}\n⚠️ Oversold! Possible BUY signal."
+        send_telegram_message(message)
+        return message
+    elif k > 80:
+        message = f"📈 XAUUSD Stochastic %K = {k}\n⚠️ Overbought! Possible SELL signal."
+        send_telegram_message(message)
+        return message
+    else:
+        return f"ℹ️ Neutral: %K = {k}. No alert sent."
+
+# === 🏠 Homepage for Render health check ===
+@app.route("/")
+def home():
+    return "✅ XAUUSD Telegram Bot is Live"
+
+# === 🚀 Local development entry point ===
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(debug=False, host="0.0.0.0", port=port)
+    app.run(debug=True)
