@@ -2,15 +2,15 @@ from flask import Flask
 import requests
 import pandas as pd
 
-# === 🔐 CREDENTIALS ===
+# === 🔐 CREDENTIALS (hardcoded for simplicity) ===
 BOT_TOKEN = "7308283803:AAHm3CmrIlpGoehyAhX9xgJdAzTn_bZcJcU"
 CHAT_ID = "674899244"
-API_KEY = "7f4ff730c91f41f08a1c91a9c6c62391"  # Twelve Data API
+API_KEY = "7f4ff730c91f41f08a1c91a9c6c62391"  # Twelve Data API key
 
 # === ⚙️ FLASK APP ===
 app = Flask(__name__)
 
-# === 📬 Send message to Telegram ===
+# === 📬 Send Telegram message ===
 def send_telegram_message(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": text}
@@ -20,11 +20,12 @@ def send_telegram_message(text):
     except Exception as e:
         print(f"❌ Telegram error: {e}")
 
-# === 📊 Get Stochastic data from Twelve Data ===
+# === 📊 Get Stochastic %K and %D from Twelve Data ===
 def get_stochastic():
     url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=5min&outputsize=100&apikey={API_KEY}"
     try:
         response = requests.get(url).json()
+
         if "values" not in response:
             return None, f"Twelve Data error: {response.get('message', 'No candle data returned')}"
 
@@ -47,7 +48,7 @@ def get_stochastic():
     except Exception as e:
         return None, f"❌ Exception: {str(e)}"
 
-# === 🔁 /check endpoint to trigger the strategy ===
+# === 🔁 /check endpoint ===
 @app.route("/check")
 def check_stochastic():
     values, error = get_stochastic()
@@ -70,11 +71,11 @@ def check_stochastic():
     else:
         return f"ℹ️ Neutral: %K = {k}. No alert sent."
 
-# === 🏠 Homepage for Render ===
+# === 🏠 Homepage for Render health check ===
 @app.route("/")
 def home():
     return "✅ XAUUSD Telegram Bot is Live"
 
-# === 🔧 Local Testing ===
+# === 🚀 Run locally (not used by gunicorn) ===
 if __name__ == "__main__":
     app.run(debug=True)
