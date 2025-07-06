@@ -2,10 +2,10 @@ from flask import Flask
 import requests
 import pandas as pd
 
-# === 🔐 CREDENTIALS (hardcoded for deployment) ===
+# === 🔐 CREDENTIALS ===
 BOT_TOKEN = "7308283803:AAHm3CmrIlpGoehyAhX9xgJdAzTn_bZcJcU"
 CHAT_ID = "674899244"
-API_KEY = "7f4ff730c91f41f08a1c91a9c6c62391"  # Twelve Data API key
+API_KEY = "7f4ff730c91f41f08a1c91a9c6c62391"  # Twelve Data API
 
 # === ⚙️ FLASK APP ===
 app = Flask(__name__)
@@ -20,13 +20,13 @@ def send_telegram_message(text):
     except Exception as e:
         print(f"❌ Telegram error: {e}")
 
-# === 📊 Calculate Stochastic %K and %D ===
+# === 📊 Get Stochastic data from Twelve Data ===
 def get_stochastic():
     url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=5min&outputsize=100&apikey={API_KEY}"
     try:
         response = requests.get(url).json()
         if "values" not in response:
-            return None, "❌ Data error: 'values' missing in response"
+            return None, f"Twelve Data error: {response.get('message', 'No candle data returned')}"
 
         df = pd.DataFrame(response["values"])
         df["datetime"] = pd.to_datetime(df["datetime"])
@@ -34,7 +34,7 @@ def get_stochastic():
         df = df.astype(float)
         df.sort_index(inplace=True)
 
-        # Calculate %K and %D
+        # Calculate Stochastic %K and %D
         low_min = df["low"].rolling(window=14).min()
         high_max = df["high"].rolling(window=14).max()
         df["%K"] = 100 * ((df["close"] - low_min) / (high_max - low_min))
@@ -45,15 +45,16 @@ def get_stochastic():
         return (round(latest_k, 2), round(latest_d, 2)), None
 
     except Exception as e:
-        return None, f"❌ Exception during Stochastic calculation: {str(e)}"
+        return None, f"❌ Exception: {str(e)}"
 
-# === 🔁 Route to trigger Stochastic check ===
+# === 🔁 /check endpoint to trigger the strategy ===
 @app.route("/check")
 def check_stochastic():
     values, error = get_stochastic()
     if error:
-        send_telegram_message(error)
-        return error
+        message = f"⚠️ Could not fetch data.\n{error}"
+        send_telegram_message(message)
+        return message
 
     k, d = values
     print(f"📊 Latest Stochastic %K = {k}, %D = {d}")
@@ -69,11 +70,11 @@ def check_stochastic():
     else:
         return f"ℹ️ Neutral: %K = {k}. No alert sent."
 
-# === 🏠 Homepage for Render health check ===
+# === 🏠 Homepage for Render ===
 @app.route("/")
 def home():
     return "✅ XAUUSD Telegram Bot is Live"
 
-# === 🚀 Local development entry point ===
+# === 🔧 Local Testing ===
 if __name__ == "__main__":
     app.run(debug=True)
